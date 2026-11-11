@@ -153,6 +153,43 @@ Additional requests in the ``capture_http`` context and will be appended to the 
 
 The ``WARC-IP-Address`` header will also be added for each record if the IP address is available.
 
+Request Attribution and Nested Contexts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A request is attributed to the innermost ``capture_http`` context that is
+active on the current thread when the request is *started* (not when its
+connection was created). This means that connections may be created outside
+a context and reused inside one, while requests started outside any context
+are never recorded:
+
+.. code:: python
+
+    from warcio.capture_http import capture_http
+    import http.client  # or requests, imported after capture_http
+
+    conn = http.client.HTTPConnection('example.com')  # created outside
+
+    with capture_http('outer.warc.gz') as outer:
+        conn.request('GET', '/one')        # recorded in outer.warc.gz
+        with capture_http('inner.warc.gz') as inner:
+            conn.request('GET', '/two')    # recorded in inner.warc.gz
+            # reading the outer response here still records it in outer
+        conn.request('GET', '/three')      # recorded in outer.warc.gz
+
+    conn.request('GET', '/four')           # not recorded
+
+Nested contexts restore the enclosing context when the inner context exits,
+including when it exits via an exception. Recording state is thread-local and
+is not propagated across threads.
+
+Each request/response pair is written exactly once, when its response is
+closed. Responses should be closed before their owning context exits;
+transactions still open when their context exits are discarded without
+writing. If a response is closed early, only the bytes actually read from it
+are recorded. Responses on multiple connections of the same thread may be
+read interleaved: each transaction keeps its own url, ip and buffers, so
+requests and responses never get mixed.
+
 The following example (similar to a `unit test from the test suite <test/test_capture_http.py>`__) demonstrates the resulting records created with ``capture_http``:
 
 .. code:: python

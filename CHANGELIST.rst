@@ -1,3 +1,8 @@
+Unreleased
+~~~~~~~~~~
+
+- Fix ``capture_http`` request attribution: every request is recorded in the innermost capture context that is active when the request is started, not in the context that happened to be active when the connection was created. Nested contexts now restore the outer context on normal and exception exits, reused connections record only requests started inside a context, and requests started outside any context are no longer recorded. Each request/response pair keeps its own url, ip and buffers, so interleaved responses read on multiple connections of the same thread no longer get mixed. Short reads record only the bytes actually read, every transaction is written at most once, and early close or filter exceptions release that transaction's buffers without affecting others.
+
 1.8.2
 ~~~~~
 

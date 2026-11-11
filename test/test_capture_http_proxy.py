@@ -122,7 +122,9 @@ class TestCaptureHttpProxy():
                 res = sesh.get("https://example.com/test", proxies=self.proxies, verify=False)
                 res = sesh.get("https://example.com/foo", proxies=self.proxies, verify=False)
 
-            # *will* be captured, as part of same session... (fix this?)
+            # *will not* be captured: the request is started outside of
+            # any capture_http context, even though the connection is
+            # reused from the previous session requests
             res = sesh.get("https://example.com/skip", proxies=self.proxies, verify=False)
 
             with capture_http(warc_writer):
@@ -151,15 +153,7 @@ class TestCaptureHttpProxy():
             assert request.rec_headers['WARC-Target-URI'] == "https://example.com/foo"
             assert request.rec_headers['WARC-Proxy-Host'] == 'https://proxy.com:{0}'.format(self.port)
 
-            response = next(ai)
-            assert response.rec_type == 'response'
-            assert response.rec_headers['WARC-Target-URI'] == "https://example.com/skip"
-            assert response.rec_headers['WARC-Proxy-Host'] == 'https://proxy.com:{0}'.format(self.port)
-            assert response.content_stream().read().decode('utf-8') == 'Proxied: /https://example.com/skip'
-
-            request = next(ai)
-            assert request.rec_type == 'request'
-
+            # the /skip request was made outside any context: not recorded
             response = next(ai)
             assert response.rec_type == 'response'
             assert response.rec_headers['WARC-Target-URI'] == "https://example.com/bar"
